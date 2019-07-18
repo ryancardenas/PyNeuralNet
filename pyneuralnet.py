@@ -79,3 +79,74 @@ def arrayMemorySize(x, base=10):
                 power = i * 3
 
     print(np.shape(x), 'array uses', round(x.nbytes/base**power, 2), unit)
+
+
+class Layer(object):
+    def __init__(self, num_prev, num_neurons, activation_function='sigmoid'):
+        '''
+        Initialize weights randomly with He scaling.
+
+        self.A -- [num_neurons, 1] Array of activations
+        self.Z -- [num_neurons, 1] Array of linearly aggregated inputs
+        self.W -- [num_neurons, num_prev] Array of weights applied to previous layer's activations A.
+        self.b -- [num_neurons, 1] Array of biases
+        '''
+        self.n = num_neurons
+        self.act = activation_function
+
+        self.A = np.zeros((num_neurons,1))
+        self.Z = np.zeros((num_neurons,1))
+        self.b = np.zeros((self.n,1))
+
+        # He initialization.
+        if self.act == 'sigmoid':
+            self.W = np.random.randn(num_neurons, num_prev) * np.sqrt(2.0/num_prev)
+
+    def forward(self, A_prev):
+        '''
+        Description:
+        Perform forward pass by computing Z, then A.
+
+        Parameters:
+        A_prev -- [num_prev, m_samples] Array of activations from previous layer.
+
+        Computes:
+        self.A -- [self.n, m_samples] Array of activations for this layer.
+        '''
+        self.Z = self.W @ A_prev + self.b
+
+        if self.act == 'linear':
+            self.A = self.Z
+
+        elif self.act == 'sigmoid':
+            self.A = 1 / (1 + np.exp(-self.Z))
+
+        return self.A
+
+    def backward(self, W_next, dZ_next, A_prev):
+        '''
+        Description:
+        Compute dA first, then dZ, then dW and db.
+
+        Parameters:
+        W_next -- [num_next, self.n] Array of weights between this layer and next layer.
+        dZ_next -- [num_next, m_samples] Array of linear inputs to next layer.
+        A_prev -- [num_prev,m_samples] Array of activations from previous layer.
+
+        Computes:
+        self.dA -- [self.n, m_samples] Gradient of cost w.r.t. activations.
+        self.dZ -- [self.n, m_samples] Gradient of cost w.r.t. linear inputs.
+        self.dW -- [self.n, num_prev] Gradient of cost w.r.t. weights.
+        self.db -- [self.n, 1] Gradient of cost w.r.t. biases.
+        '''
+        m = self.A.shape[1]
+        self.dA = W_next.T @ dZ_next
+
+        if self.act == 'linear':
+            self.dZ = self.dA
+
+        elif self.act == 'sigmoid':
+            self.dZ = self.A * (1 - self.A) * self.dA
+
+        self.dW = 1 / m * self.dZ @ A_prev.T
+        self.db = 1 / m * np.sum(self.dZ, axis=1, keepdims=True)
