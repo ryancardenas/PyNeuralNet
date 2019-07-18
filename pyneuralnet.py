@@ -159,11 +159,11 @@ class Layer(object):
 def buildNetwork(layout, num_features):
     '''
     Arguments:
-    layout -- (num_layers, 2) Tuple where first column contains number of neurons in each layer
+    layout -- [num_layers, 2] Tuple where first column contains number of neurons in each layer
                 and second column contains activation functions for each layer.
 
     Returns:
-    network -- (num_layers,:) List of layers, each with number of neurons specified in 'network'.
+    network -- [num_layers,:] List of layers, each with number of neurons specified in 'network'.
     '''
     network = []
     network.append(Layer(num_features, layout[0][0], layout[0][1]))
