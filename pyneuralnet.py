@@ -150,3 +150,30 @@ class Layer(object):
 
         self.dW = 1 / m * self.dZ @ A_prev.T
         self.db = 1 / m * np.sum(self.dZ, axis=1, keepdims=True)
+
+    def update(self, learning_rate):
+        self.W = self.W - learning_rate * self.dW
+        self.b = self.b - learning_rate * self.db
+
+
+def buildNetwork(layout, num_features):
+    '''
+    Arguments:
+    layout -- (num_layers, 2) Tuple where first column contains number of neurons in each layer
+                and second column contains activation functions for each layer.
+
+    Returns:
+    network -- (num_layers,:) List of layers, each with number of neurons specified in 'network'.
+    '''
+    network = []
+    network.append(Layer(num_features, layout[0][0], layout[0][1]))
+    print('Layer 1:', layout[0])
+
+    for i in range(1, len(layout)):
+        num_prev = layout[i-1][0]
+        num_neurons = layout[i][0]
+        activation_function = layout[i][1]
+        network.append(Layer(num_prev, num_neurons, activation_function))
+        print('Layer', i+1, '\b:', layout[i])
+
+    return network
