@@ -177,3 +177,36 @@ def buildNetwork(layout, num_features):
         print('Layer', i+1, '\b:', layout[i])
 
     return network
+
+
+def costMSE(H, Y):
+    '''
+    Parameters:
+    H -- [1, m] Predicted values.
+    Y -- [1, m] Target values.
+
+    Returns:
+    J -- (float) Mean squared error of dataset.
+    grad -- [1, m] Gradient of cost w.r.t. predicted values.
+    '''
+    m = H.shape[1]
+    J = 1 / (2 * m) * (H - Y) @ (H - Y).T
+    grad = 1 / m * (H - Y)
+    return J, grad
+
+
+def costLogistic(H, Y):
+    '''
+    Parameters:
+    H -- [n, m] Predicted values in range (0, 1).
+    Y -- [n, m] Target values, either 0 or 1.
+
+    Returns:
+    J -- [n, 1] Logistic cost of dataset.
+    grad -- [n, 1] Gradient of cost w.r.t. predicted values.
+
+    '''
+    m = H.shape[1]
+    J = -1 / m * np.sum(Y * np.log(H) + (1 - Y) * np.log(1 - H), axis=1)
+    grad = 1 / m * np.sum(np.divide(-Y, H) + np.divide(1 - Y, 1 - H), axis=1, keepdims=True)
+    return J, grad
