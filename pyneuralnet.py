@@ -1,7 +1,8 @@
+import matplotlib.pyplot as plt
 import numpy as np
 from IPython.display import clear_output
 
-def loadCSVData(filename, labelcol=-1, usecols=None):
+def loadCSVData(filename, labelcol=-1, usecols=None, skiprow=0):
     '''
     DESCRIPTION:
     Loads data from CSV file into two arrays: one containing features and the other
@@ -16,7 +17,7 @@ def loadCSVData(filename, labelcol=-1, usecols=None):
     xdat -- [m,n](numpy array) Feature data.
     ydat -- [n,p](numpy array) Label data.
     '''
-    data = np.loadtxt(filename, delimiter=',', skiprows=1, usecols=usecols)
+    data = np.loadtxt(filename, delimiter=',', skiprows=skiprow, usecols=usecols)
     np.random.shuffle(data)
 
     xdat = np.copy(data[:])
@@ -212,3 +213,93 @@ def costLogistic(H, Y):
     J = -1 / m * np.sum(Y * np.log(H) + (1 - Y) * np.log(1 - H), axis=1)
     grad = 1 / m * np.sum(np.divide(-Y, H) + np.divide(1 - Y, 1 - H), axis=1, keepdims=True)
     return J, grad
+
+
+def forwardprop(X, network):
+    L = len(network)
+    network[0].forward(X)
+
+    for i in range(1, L):
+        network[i].forward(network[i-1].A)
+
+    return network
+
+
+def computeCost(Y, network, costfunc='logistic'):
+    # Compute cost
+    if costfunc == 'logistic':
+        cost, grad = costLogistic(network[-1].A, Y)
+    elif costfunc == 'mse':
+        cost, grad = costMSE(network[-1].A, Y)
+#     print('Cost: ', costs)
+    return cost, grad
+
+
+def backprop(grad, network):
+    L = len(network)
+    W_output = np.eye(Y.shape[0], Y.shape[0])
+
+    network[L-1].backward(W_output, grad, network[L-2].A)
+
+    for i in reversed(range(0, L - 1)):
+        W_next = network[i+1].W
+        dZ_next = network[i+1].dZ
+        A_prev = network[i-1].A
+        network[i].backward(W_next, dZ_next, A_prev)
+
+    return network
+
+
+def gradientDescent(X, Y, network, num_iterations, learning_rate, 
+                    costfunc='logistic', showprogress='True'):
+    L = len(network)
+    costs = np.zeros((num_iterations,k))
+
+    for epoch in range(num_iterations):
+        network = forwardprop(X, network)
+        costs[epoch], grad = computeCost(Y, network, costfunc)
+        network = backprop(grad, network)
+
+        # Perform one step of gradient descent
+        for i in range(1, L):
+            network[i].update(learning_rate)
+
+        if showprogress == 'True':
+            update_progress(epoch/num_iterations)
+
+    if showprogress == 'True':
+        update_progress(1)
+
+    return network, costs
+
+
+def predict(X, network):
+    L = len(network)
+    H = network[-1].A
+
+    # Forward propagation
+    network = forwardprop(X, network)
+
+    # Compute predictions
+    predicted = np.zeros(network[-1].A.shape)
+    if network[-1].act == 'sigmoid':
+        predicted = 1*(H > 0.5)
+    elif network[-1].act == 'tanh':
+        predicted = 1*(H > 0)
+
+    return H
+
+
+def evaluateModel(H, Y):
+    k = Y.shape[0]
+
+    tp = np.sum(np.logical_and(H, Y))
+    fp = np.sum(np.logical_and(H, Y==0))
+    tn = np.sum(np.logical_and(H==0, Y==0))
+    fn = np.sum(np.logical_and(H==0, Y))
+
+    accuracy = np.sum(H==Y) / k
+    precision = tp / (tp + fp)
+    recall = tp / (tp + fn)
+
+    return accuracy, precision, recall

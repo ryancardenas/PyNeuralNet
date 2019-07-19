@@ -1,0 +1,3 @@
+logic1.csv: XOR
+logic2.csv: ((p or q) and not(p and b))
+logic3.csv: (a or b) and ~(c or d)
