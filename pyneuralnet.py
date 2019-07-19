@@ -188,30 +188,30 @@ def costMSE(H, Y):
 
     Returns:
     J -- (float) Mean squared error of dataset.
-    grad -- [1, m] Gradient of cost w.r.t. predicted values.
+    grad -- (float) Gradient of cost w.r.t. predicted values.
     '''
     if H.shape[0] > 1:
         print('ERROR: MSE cost function only excepts input with shape [1, m].')
     m = H.shape[1]
     J = 1 / (2 * m) * (H - Y) @ (H - Y).T
-    grad = 1 / m * (H - Y)
+    grad = 1 / m * np.sum(H - Y)
     return J, grad
 
 
 def costLogistic(H, Y):
     '''
     Parameters:
-    H -- [n, m] Predicted values in range (0, 1).
-    Y -- [n, m] Target values, either 0 or 1.
+    H -- [1, m] Predicted values in range (0, 1).
+    Y -- [1, m] Target values, either 0 or 1.
 
     Returns:
-    J -- [n, 1] Logistic cost of dataset.
-    grad -- [n, 1] Gradient of cost w.r.t. predicted values.
+    J -- (float) Logistic cost of dataset.
+    grad -- (float) Gradient of cost w.r.t. predicted values.
 
     '''
     m = H.shape[1]
-    J = -1 / m * np.sum(Y * np.log(H) + (1 - Y) * np.log(1 - H), axis=1)
-    grad = 1 / m * np.sum(np.divide(-Y, H) + np.divide(1 - Y, 1 - H), axis=1, keepdims=True)
+    J = -1 / m * (Y @ np.log(H.T) + (1 - Y) @ np.log(1 - H.T))
+    grad = 1 / m * np.sum(np.divide(-Y, H) + np.divide(1 - Y, 1 - H))
     return J, grad
 
 
@@ -250,7 +250,7 @@ def backprop(grad, network):
     return network
 
 
-def gradientDescent(X, Y, network, num_iterations, learning_rate, 
+def gradientDescent(X, Y, network, num_iterations, learning_rate,
                     costfunc='logistic', showprogress='True'):
     L = len(network)
     costs = np.zeros((num_iterations,k))
