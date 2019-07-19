@@ -189,6 +189,8 @@ def costMSE(H, Y):
     J -- (float) Mean squared error of dataset.
     grad -- [1, m] Gradient of cost w.r.t. predicted values.
     '''
+    if H.shape[0] > 1:
+        print('ERROR: MSE cost function only excepts input with shape [1, m].')
     m = H.shape[1]
     J = 1 / (2 * m) * (H - Y) @ (H - Y).T
     grad = 1 / m * (H - Y)
