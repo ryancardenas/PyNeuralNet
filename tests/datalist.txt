@@ -1,3 +1,4 @@
+linear3.csv: y = 1 where (0.5*x2) > (0.1*x1 + b)
 logic0.csv: OR
 logic1.csv: XOR
 logic2.csv: ((p or q) and not(p and b))
