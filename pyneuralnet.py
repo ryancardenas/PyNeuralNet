@@ -2,85 +2,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from IPython.display import clear_output
 
-def loadCSVData(filename, labelcol=-1, usecols=None, skiprow=0):
-    '''
-    DESCRIPTION:
-    Loads data from CSV file into two arrays: one containing features and the other
-    containing labels.
-
-    PARAMETERS:
-    filename -- (str) Location of CSV file to be processed.
-    labelcol -- (int) Index of column containing labels.
-    usecols -- (int, tuple) Indices of columns to be extracted from CSV.
-
-    RETURNS:
-    xdat -- [m,n](numpy array) Feature data.
-    ydat -- [n,p](numpy array) Label data.
-    '''
-    data = np.loadtxt(filename, delimiter=',', skiprows=skiprow, usecols=usecols)
-    np.random.shuffle(data)
-
-    xdat = np.copy(data[:])
-    xdat = np.delete(xdat, labelcol, axis=1)
-    ydat = np.copy(data[:,labelcol])
-    m = np.shape(ydat)[0]
-    ydat = ydat.reshape(m,1)
-
-    return xdat, ydat
-
-
-def update_progress(progress, msg=''):
-    '''
-    DESCRIPTION:
-    Displays progress bar and percent completion.
-
-    PARAMETERS:
-    progress -- (float) Decimal in range [0,1] representing percent completion.
-    msg -- (str) Optional message to display with progress bar.
-    '''
-    bar_length = 20
-    if isinstance(progress, int):
-        progress = float(progress)
-    if not isinstance(progress, float):
-        progress = 0
-    if progress < 0:
-        progress = 0
-    if progress >= 1:
-        progress = 1
-
-    block = int(round(bar_length * progress))
-
-    clear_output(wait = True)
-    text = "Progress: [{0}] {1:.1f}%".format( "#" * block + "-" * (bar_length - block), progress * 100)
-    text += "\n" + msg
-    print(text)
-
-
-def arrayMemorySize(x, base=10):
-    '''
-    DESCRIPTION:
-    Prints memory size of a numpy array.
-
-    PARAMETERS:
-    x -- (numpy array)
-    base -- (int) Specifies base10 (for SI) or base2 (for IEC) computation.
-    '''
-    if base == 2:
-        units = ['B', 'KiB', 'MiB', 'GiB', 'TiB']
-        for i in range(5):
-            if round(x.nbytes/2**(i * 10), 2) > 1:
-                unit = units[i]
-                power = i * 10
-
-    else:
-        units = ['B', 'KB', 'MB', 'GB', 'TB']
-        for i in range(5):
-            if round(x.nbytes/10**(i * 3), 2) > 1:
-                unit = units[i]
-                power = i * 3
-
-    print(np.shape(x), 'array uses', round(x.nbytes/base**power, 2), unit)
-
 
 class Layer(object):
     def __init__(self, num_prev, num_neurons, activation_function='sigmoid'):
@@ -157,6 +78,32 @@ class Layer(object):
         self.b = self.b - learning_rate * self.db
 
 
+def arrayMemorySize(x, base=10):
+    '''
+    DESCRIPTION:
+    Prints memory size of a numpy array.
+
+    PARAMETERS:
+    x -- (numpy array)
+    base -- (int) Specifies base10 (for SI) or base2 (for IEC) computation.
+    '''
+    if base == 2:
+        units = ['B', 'KiB', 'MiB', 'GiB', 'TiB']
+        for i in range(5):
+            if round(x.nbytes/2**(i * 10), 2) > 1:
+                unit = units[i]
+                power = i * 10
+
+    else:
+        units = ['B', 'KB', 'MB', 'GB', 'TB']
+        for i in range(5):
+            if round(x.nbytes/10**(i * 3), 2) > 1:
+                unit = units[i]
+                power = i * 3
+
+    print(np.shape(x), 'array uses', round(x.nbytes/base**power, 2), unit)
+
+
 def buildNetwork(layout, num_features):
     '''
     Arguments:
@@ -194,7 +141,7 @@ def costMSE(H, Y):
         print('ERROR: MSE cost function only excepts input with shape [1, m].')
     m = H.shape[1]
     J = 1 / (2 * m) * (H - Y) @ (H - Y).T
-    grad = 1 / m * np.sum(H - Y)
+    grad = 1 / m * np.sum(H - Y, keepdims=True)
     return J, grad
 
 
@@ -211,8 +158,62 @@ def costLogistic(H, Y):
     '''
     m = H.shape[1]
     J = -1 / m * (Y @ np.log(H.T) + (1 - Y) @ np.log(1 - H.T))
-    grad = 1 / m * np.sum(np.divide(-Y, H) + np.divide(1 - Y, 1 - H))
+    grad = 1 / m * np.sum(np.divide(-Y, H) + np.divide(1 - Y, 1 - H), keepdims=True)
     return J, grad
+
+
+def loadCSVData(filename, labelcol=-1, usecols=None, skiprow=0):
+    '''
+    DESCRIPTION:
+    Loads data from CSV file into two arrays: one containing features and the other
+    containing labels.
+
+    PARAMETERS:
+    filename -- (str) Location of CSV file to be processed.
+    labelcol -- (int) Index of column containing labels.
+    usecols -- (int, tuple) Indices of columns to be extracted from CSV.
+
+    RETURNS:
+    xdat -- [m,n](numpy array) Feature data.
+    ydat -- [n,p](numpy array) Label data.
+    '''
+    data = np.loadtxt(filename, delimiter=',', skiprows=skiprow, usecols=usecols)
+    np.random.shuffle(data)
+
+    xdat = np.copy(data[:])
+    xdat = np.delete(xdat, labelcol, axis=1)
+    ydat = np.copy(data[:,labelcol])
+    m = np.shape(ydat)[0]
+    ydat = ydat.reshape(m,1)
+
+    return xdat, ydat
+
+
+def update_progress(progress, msg=''):
+    '''
+    DESCRIPTION:
+    Displays progress bar and percent completion.
+
+    PARAMETERS:
+    progress -- (float) Decimal in range [0,1] representing percent completion.
+    msg -- (str) Optional message to display with progress bar.
+    '''
+    bar_length = 20
+    if isinstance(progress, int):
+        progress = float(progress)
+    if not isinstance(progress, float):
+        progress = 0
+    if progress < 0:
+        progress = 0
+    if progress >= 1:
+        progress = 1
+
+    block = int(round(bar_length * progress))
+
+    clear_output(wait = True)
+    text = "Progress: [{0}] {1:.1f}%".format( "#" * block + "-" * (bar_length - block), progress * 100)
+    text += "\n" + msg
+    print(text)
 
 
 def forwardprop(X, network):
@@ -231,7 +232,6 @@ def computeCost(Y, network, costfunc='logistic'):
         cost, grad = costLogistic(network[-1].A, Y)
     elif costfunc == 'mse':
         cost, grad = costMSE(network[-1].A, Y)
-#     print('Cost: ', costs)
     return cost, grad
 
 
@@ -252,6 +252,7 @@ def backprop(grad, network):
 
 def gradientDescent(X, Y, network, num_iterations, learning_rate,
                     costfunc='logistic', showprogress='True'):
+
     L = len(network)
     costs = np.zeros((num_iterations,k))
 
@@ -272,13 +273,15 @@ def gradientDescent(X, Y, network, num_iterations, learning_rate,
 
     return network, costs
 
-
 def predict(X, network):
-    L = len(network)
-    H = network[-1].A
-
+    '''
+    RETURNS:
+    predicted -- [num_target_classes, 1] Array of 1's and 0's representing
+                 predicted values for each target class.
+    '''
     # Forward propagation
     network = forwardprop(X, network)
+    H = network[-1].A
 
     # Compute predictions
     predicted = np.zeros(network[-1].A.shape)
@@ -287,11 +290,12 @@ def predict(X, network):
     elif network[-1].act == 'tanh':
         predicted = 1*(H > 0)
 
-    return H
+    return predicted
 
 
 def evaluateModel(H, Y):
     k = Y.shape[0]
+    eps = 1e-8
 
     tp = np.sum(np.logical_and(H, Y))
     fp = np.sum(np.logical_and(H, Y==0))
@@ -299,7 +303,7 @@ def evaluateModel(H, Y):
     fn = np.sum(np.logical_and(H==0, Y))
 
     accuracy = np.sum(H==Y) / k
-    precision = tp / (tp + fp)
-    recall = tp / (tp + fn)
+    precision = tp / (tp + fp + eps)
+    recall = tp / (tp + fn + eps)
 
     return accuracy, precision, recall
