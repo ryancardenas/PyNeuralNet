@@ -1,3 +1,4 @@
+import copy
 import matplotlib.pyplot as plt
 import numpy as np
 from IPython.display import clear_output
@@ -20,12 +21,17 @@ class Layer(object):
         self.Z = np.zeros((num_neurons,1))
         self.b = np.zeros((self.n,1))
 
-        # He initialization.
-        if self.act == 'sigmoid':
-            self.W = np.random.randn(num_neurons, num_prev) * np.sqrt(2.0/num_prev)
-        # Xavier initialization
-        elif self.act == 'tanh':
-            self.W = np.random.randn(num_neurons, num_prev) * np.sqrt(1.0/num_prev)
+
+################################ UNCOMMENT THIS AFTER TEST #################
+        # # He initialization.
+        # if self.act == 'sigmoid':
+        #     self.W = np.random.randn(num_neurons, num_prev) * np.sqrt(2.0/num_prev)
+        # # Xavier initialization
+        # elif self.act == 'tanh':
+        #     self.W = np.random.randn(num_neurons, num_prev) * np.sqrt(1.0/num_prev)
+################################ DELETE THIS AFTER TEST #################
+        self.W = np.random.randn(num_neurons, num_prev) * 0.01
+######################################################################
 
         self.dA = np.zeros((num_neurons,1))
         self.dZ = np.zeros((num_neurons,1))
@@ -43,9 +49,7 @@ class Layer(object):
         RETURNS:
         None
         '''
-        print('before', self.Z.shape, self.W.shape, A_prev.shape, self.b.shape)
         self.Z = self.W @ A_prev + self.b
-        print('during', self.Z.shape, self.W.shape, A_prev.shape, self.b.shape)
 
         if self.act == 'linear':
             self.A = self.Z
@@ -54,10 +58,7 @@ class Layer(object):
             self.A = 1 / (1 + np.exp(-self.Z))
 
         elif self.act == 'tanh':
-            self.A = np.tanh(Z)
-
-        print('after', self.Z.shape, self.W.shape, A_prev.shape, self.b.shape)
-
+            self.A = np.tanh(self.Z)
 
     def backward(self, W_next, dZ_next, A_prev):
         '''
@@ -93,6 +94,106 @@ class Layer(object):
     def update(self, learning_rate):
         self.W = self.W - learning_rate * self.dW
         self.b = self.b - learning_rate * self.db
+
+def forwardprop(X, network):
+    ###############
+    # VERIFIED
+    ###############
+    L = len(network)
+    network[0].forward(X)
+
+    for i in range(1, L):
+        network[i].forward(network[i-1].A)
+
+
+def backprop(grad, X, network):
+    L = len(network)
+    W_output = np.eye(network[-1].A.shape[0], network[-1].A.shape[0])
+
+    if L == 1:
+        A_prev = X
+    else:
+        A_prev = network[L-2].A
+    network[L-1].backward(W_output, grad, A_prev)
+    # print('\ndW', L-1, ':', network[L-1].dW, '\ndb', L-1, ':', network[L-1].db)
+    #    print('Layer', L-1, 'backprop successful')
+
+    for i in reversed(range(0, L - 1)):
+        W_next = network[i+1].W
+        dZ_next = network[i+1].dZ
+        if i == 0:
+            A_prev = X
+        else:
+            A_prev = network[i-1].A
+        network[i].backward(W_next, dZ_next, A_prev)
+        # print('\ndW', i, ':', network[i].dW, '\ndb', i, ':', network[i].db)
+
+
+def gradientDescent(X, Y, network, num_iterations, learning_rate,
+                    costfunction='logistic', showprogress=True,
+                    showmsg=False, debugmsg=''):
+    L = len(network)
+    costs = np.zeros((num_iterations))
+    accs = np.zeros((num_iterations))
+
+    for epoch in range(num_iterations):
+        forwardprop(X, network)
+        costs[epoch], grad = computeCost(Y, network, costfunc=costfunction)
+
+        H = predict(X, network)
+        accs[epoch], prec, rec = evaluateModel(H, Y)
+
+        backprop(grad, X, network)
+
+        # Perform one step of gradient descent
+        for i in range(0, L):
+            network[i].update(learning_rate)
+
+        if showmsg == True:
+            if debugmsg=='grad':
+                msg = grad
+            elif debugmsg=='cost':
+                msg = costs[epoch]
+            elif debugmsg=='acc':
+                msg = accs[epoch]
+            elif debugmsg=='last.A':
+                msg = network[-1].A
+            elif debugmsg=='last.Z':
+                msg = network[-1].Z
+            elif debugmsg=='last.W':
+                msg = network[-1].W
+            elif debugmsg=='last.b':
+                msg = network[-1].b
+            elif debugmsg=='last.dA':
+                msg = network[-1].dA
+            elif debugmsg=='last.dZ':
+                msg = network[-1].dZ
+            elif debugmsg=='last.dW':
+                msg = network[-1].dW
+            elif debugmsg=='last.db':
+                msg = network[-1].db
+            elif debugmsg=='first.A':
+                msg = network[0].A
+            elif debugmsg=='first.Z':
+                msg = network[0].Z
+            elif debugmsg=='first.W':
+                msg = network[0].W
+            elif debugmsg=='first.b':
+                msg = network[0].b
+            elif debugmsg=='first.dA':
+                msg = network[0].dA
+            elif debugmsg=='first.dZ':
+                msg = network[0].dZ
+            elif debugmsg=='first.dW':
+                msg = network[0].dW
+            elif debugmsg=='first.db':
+                msg = network[0].db
+            update_progress(epoch/num_iterations, str(msg))
+
+    if showprogress == True:
+        update_progress(1)
+
+    return network, costs, accs
 
 
 def arrayMemorySize(x, base=10):
@@ -165,17 +266,21 @@ def costMSE(H, Y):
 def costLogistic(H, Y):
     '''
     Parameters:
-    H -- [1, m] Predicted values in range (0, 1).
-    Y -- [1, m] Target values, either 0 or 1.
+    H -- [1, m_samples] Predicted values in range (0, 1).
+    Y -- [1, m_samples] Target values, either 0 or 1.
 
     Returns:
     J -- (float) Logistic cost of dataset.
-    grad -- (float) Gradient of cost w.r.t. predicted values.
+    grad -- [1, m_samples] Gradient of cost w.r.t. predicted values.
+                NOTE: grad must be [1, m] because backpropagation will sum over
+                axis=1 and then divide by m_samples to get an average for
+                updating network[?].W and network[?].b.
 
     '''
-    m = H.shape[1]
+    m = Y.shape[1]
+    Y = Y.astype('float32')
     J = -1 / m * (Y @ np.log(H.T) + (1 - Y) @ np.log(1 - H.T))
-    grad = 1 / m * np.sum(np.divide(-Y, H) + np.divide(1 - Y, 1 - H), keepdims=True)
+    grad = np.divide((H - Y), H * (1 - H))
     return J, grad
 
 
@@ -242,82 +347,14 @@ def computeCost(Y, network, costfunc='logistic'):
     return cost, grad
 
 
-def forwardprop(X, network):
-    ###############
-    # VERIFIED
-    ###############
-    L = len(network)
-    network[0].forward(X)
-    print('forward layer: 0')
-    print('first A:', network[0].A.shape)
-
-    for i in range(1, L):
-        print('next A:', network[i-1].A.shape)
-        network[i].forward(network[i-1].A)
-        print('forward layer:', i)
-
-
-def backprop(grad, X, network):
-    L = len(network)
-    W_output = np.eye(network[-1].A.shape[0], network[-1].A.shape[0])
-
-    if L == 1:
-        A_prev = X
-    else:
-        A_prev = network[L-2].A
-    network[L-1].backward(W_output, grad, A_prev)
-    #    print('Layer', L-1, 'backprop successful')
-
-    for i in reversed(range(0, L - 1)):
-        W_next = network[i+1].W
-        dZ_next = network[i+1].dZ
-        if i == 0:
-            A_prev = X
-        else:
-            A_prev = network[i-1].A
-        network[i].backward(W_next, dZ_next, A_prev)
-
-
-def gradientDescent(X, Y, network, num_iterations, learning_rate,
-                    costfunction='logistic', showprogress=True,
-                    showpreds=False):
-    L = len(network)
-    costs = np.zeros((num_iterations))
-    accs = np.zeros((num_iterations))
-
-    for epoch in range(num_iterations):
-        forwardprop(X, network)
-        costs[epoch], grad = computeCost(Y, network, costfunc=costfunction)
-
-        H = predict(X, network)
-        accs[epoch], prec, rec = evaluateModel(H, Y)
-
-        backprop(grad, X, network)
-
-        # Perform one step of gradient descent
-        for i in range(0, L):
-            network[i].update(learning_rate)
-
-        if showprogress == True:
-            if showpreds == True:
-                msg = H
-            else: msg = ''
-            update_progress(epoch/num_iterations, str(msg))
-
-
-    if showprogress == True:
-        update_progress(1)
-
-
-    return network, costs, accs
-
-
-def predict(X, network):
+def predict(X, original_network):
     '''
     RETURNS:
     predicted -- [num_target_classes, 1] Array of 1's and 0's representing
                  predicted values for each target class.
     '''
+    # Make copy of network that won't alter original network.
+    network = copy.deepcopy(original_network)
     # Forward propagation
     forwardprop(X, network)
     H = network[-1].A
@@ -376,3 +413,7 @@ def plot2DBoundary(X, Y, network):
     plt.scatter(X[[0], :], X[[1], :], c=Y.astype('uint8'), s=10, marker='.')
     plt.contour(a, b, Z, colors='black')
     plt.show()
+
+
+def sigmoid(z):
+    return 1 / (1 + np.exp(-z))
