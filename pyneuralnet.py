@@ -86,7 +86,7 @@ class Layer(object):
             self.dZ = self.dA * self.A * (1 - self.A)
 
         elif self.act == 'tanh':
-            self.dZ = self.dA * (1 - self.Z**2)
+            self.dZ = self.dA * (1 - self.A**2)
 
         self.dW = 1 / m * self.dZ @ A_prev.T
         self.db = 1 / m * np.sum(self.dZ, axis=1, keepdims=True)
@@ -129,6 +129,66 @@ def backprop(grad, X, network):
         # print('\ndW', i, ':', network[i].dW, '\ndb', i, ':', network[i].db)
 
 
+def lognan(network, epoch):
+    if np.isnan(network[-1].A[0,0]):
+        msg2 = 'First occurence of nan in epoch ' + str(epoch) + ' AL'
+        check = 1
+    elif np.isnan(network[-1].Z[0,0]):
+        msg2 = 'First occurence of nan in epoch ' + str(epoch) + ' ZL'
+        check = 1
+    elif np.isnan(network[-1].W[0,0]):
+        msg2 = 'First occurence of nan in epoch ' + str(epoch) + ' WL'
+        check = 1
+    elif np.isnan(network[-1].b[0,0]):
+        msg2 = 'First occurence of nan in epoch ' + str(epoch) + ' bL'
+        check = 1
+    elif np.isnan(network[-1].Z[0,0]):
+        msg2 = 'First occurence of nan in epoch ' + str(epoch) + ' ZL'
+        check = 1
+    elif np.isnan(network[-1].dA[0,0]):
+        msg2 = 'First occurence of nan in epoch ' + str(epoch) + ' dAL'
+        check = 1
+    elif np.isnan(network[-1].dZ[0,0]):
+        msg2 = 'First occurence of nan in epoch ' + str(epoch) + ' dZL'
+        check = 1
+    elif np.isnan(network[-1].dW[0,0]):
+        msg2 = 'First occurence of nan in epoch ' + str(epoch) + ' dWL'
+        check = 1
+    elif np.isnan(network[-1].db[0,0]):
+        msg2 = 'First occurence of nan in epoch ' + str(epoch) + ' dbL'
+        check = 1
+    elif np.isnan(network[0].A[0,0]):
+        msg2 = 'First occurence of nan in epoch ' + str(epoch) + ' AF'
+        check = 1
+    elif np.isnan(network[0].Z[0,0]):
+        msg2 = 'First occurence of nan in epoch ' + str(epoch) + ' ZF'
+        check = 1
+    elif np.isnan(network[0].W[0,0]):
+        msg2 = 'First occurence of nan in epoch ' + str(epoch) + ' WF'
+        check = 1
+    elif np.isnan(network[0].b[0,0]):
+        msg2 = 'First occurence of nan in epoch ' + str(epoch) + ' bF'
+        check = 1
+    elif np.isnan(network[0].Z[0,0]):
+        msg2 = 'First occurence of nan in epoch ' + str(epoch) + ' ZF'
+        check = 1
+    elif np.isnan(network[0].dA[0,0]):
+        msg2 = 'First occurence of nan in epoch ' + str(epoch) + ' dAF'
+        check = 1
+    elif np.isnan(network[0].dZ[0,0]):
+        msg2 = 'First occurence of nan in epoch ' + str(epoch) + ' dZF'
+        check = 1
+    elif np.isnan(network[0].dW[0,0]):
+        msg2 = 'First occurence of nan in epoch ' + str(epoch) + ' dWF'
+        check = 1
+    elif np.isnan(network[0].db[0,0]):
+        msg2 = 'First occurence of nan in epoch ' + str(epoch) + ' dbF'
+        check = 1
+    else:
+        msg2 = ''
+        check = 0
+    return msg2, check
+
 def gradientDescent(X, Y, network, num_iterations, learning_rate,
                     costfunction='logistic', showprogress=True,
                     showmsg=False, debugmsg=''):
@@ -136,7 +196,16 @@ def gradientDescent(X, Y, network, num_iterations, learning_rate,
     costs = np.zeros((num_iterations))
     accs = np.zeros((num_iterations))
 
+###################################
+    check = 0
+
+####################################
+
     for epoch in range(num_iterations):
+################################################
+        if check==0:                      ######
+            msg2, check = lognan(network, epoch) ######
+################################################
         forwardprop(X, network)
         costs[epoch], grad = computeCost(Y, network, costfunc=costfunction)
 
@@ -148,6 +217,7 @@ def gradientDescent(X, Y, network, num_iterations, learning_rate,
         # Perform one step of gradient descent
         for i in range(0, L):
             network[i].update(learning_rate)
+
 
         if showmsg == True:
             if debugmsg=='grad':
@@ -191,7 +261,7 @@ def gradientDescent(X, Y, network, num_iterations, learning_rate,
             update_progress(epoch/num_iterations, str(msg))
 
     if showprogress == True:
-        update_progress(1)
+        update_progress(1, msg2)
 
     return network, costs, accs
 
