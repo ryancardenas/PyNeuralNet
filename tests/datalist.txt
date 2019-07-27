@@ -1,3 +1,8 @@
+clover.csv: Positives form shape of a four-leaf clover.
+elliptical.csv: Negatives form shape of ellipse.
+heartshape.csv: Positives form shape of a heart.
+linear1.csv: Linear dataset with narrow region of positives.
+linear2.csv: Linear dataset with narrow region of negatives.
 linear3.csv: y = 1 where (0.5*x2) > (0.1*x1 + b)
 logic0.csv: OR
 logic1.csv: XOR

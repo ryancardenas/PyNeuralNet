@@ -32,7 +32,8 @@ class Layer(object):
 
         # He initialization.
         if self.act == 'sigmoid':
-            self.W = np.random.randn(num_neurons, num_prev) * np.sqrt(2.0/num_prev)
+            self.W = np.random.randn(num_neurons, num_prev)
+                    * np.sqrt(2.0/num_prev)
         # Xavier initialization
         elif self.act == 'tanh':
             self.W = np.random.randn(num_neurons, num_prev) * np.sqrt(1.0/num_prev)
@@ -457,7 +458,7 @@ def msgGradDesc(debugmsg, grad, H, epoch, costs, accs, network):
     return msg
 
 def plot2DBoundary(X, Y, network, fill=False, lines=True,
-                    color_map=plt.cm.Spectral):
+                    color_map=plt.cm.Spectral, mark='o', marksize=20):
     '''
     DESCRIPTION:
     Plots 2D class boundary as predicted by the last layer of a neural network.
@@ -488,8 +489,10 @@ def plot2DBoundary(X, Y, network, fill=False, lines=True,
         plt.contourf(a, b, Z, cmap=color_map)
     if lines:
         plt.contour(a, b, Z, colors='black')
-    plt.scatter(X[[0], :], X[[1], :], c=Y.astype('uint8'),
-                cmap=color_map)
+    plt.scatter(X[[0], :], X[[1], :], marker=mark, s=marksize,
+                c=Y.astype('uint8'), cmap=color_map)
+    plt.xlim(X[0].min(), X[0].max())
+    plt.ylim(X[1].min(), X[1].max())
     plt.show()
 
 def predict(X, original_network):
