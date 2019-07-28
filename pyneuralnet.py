@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from IPython.display import clear_output
 
-
 class Layer(object):
     def __init__(self, num_prev, num_neurons, activation_function='sigmoid'):
         '''
@@ -33,10 +32,11 @@ class Layer(object):
         # He initialization.
         if self.act == 'sigmoid':
             self.W = np.random.randn(num_neurons, num_prev)
-                    * np.sqrt(2.0/num_prev)
+            self.W = self.W * np.sqrt(2.0/num_prev)
         # Xavier initialization
         elif self.act == 'tanh':
-            self.W = np.random.randn(num_neurons, num_prev) * np.sqrt(1.0/num_prev)
+            self.W = np.random.randn(num_neurons, num_prev)
+            self.W = self.W * np.sqrt(1.0/num_prev)
 
 
         self.dA = np.zeros((num_neurons,1))
@@ -114,6 +114,233 @@ class Layer(object):
         self.W = self.W - learning_rate * self.dW
         self.b = self.b - learning_rate * self.db
 
+class Network(list):
+    def __init__(self):
+        self.costfunc = 'logistic'
+        self.reg = 'L2'
+
+    def backprop(self, grad, X):
+        '''
+        DESCRIPTION:
+        Loops through each layer of a network and calls that layer's self.backward()
+        method. Starts with last layer in network (network[-1]) and passes 'grad' as
+        its parameter. Last layer also receives an identity matrix 'W_output' as a
+        parameter in order to give a one-to-one mapping for the last layer and the
+        cost function. Each preceding layer receives the gradient of the following
+        layer as a parameter.
+
+        PARAMETERS:
+        self -- [num_layers] List of neuron layers.
+        grad -- [num_output_neurons, m_samples] Gradient of cost function.
+        X -- [num_features, m_samples] Input data set.
+
+        RETURNS:
+        None
+        '''
+        L = len(self)
+        W_output = np.eye(self[-1].A.shape[0], self[-1].A.shape[0])
+
+        if L == 1:
+            A_prev = X
+        else:
+            A_prev = self[L-2].A
+        self[L-1].backward(W_output, grad, A_prev)
+
+        for i in reversed(range(0, L - 1)):
+            W_next = self[i+1].W
+            dZ_next = self[i+1].dZ
+            if i == 0:
+                A_prev = X
+            else:
+                A_prev = self[i-1].A
+            self[i].backward(W_next, dZ_next, A_prev)
+
+    def computeCost(self, Y):
+        '''
+        DESCRIPTION:
+        Selects cost function routine to execute.
+
+        PARAMETERS:
+        self -- [num_layers] List of neuron layers.
+        Y -- [1, m_samples] Target labels.
+        costfunc -- (str) Selects cost function.
+
+        RETURNS:
+        cost -- (float) Cost function output.
+        grad -- [1, m_samples] Gradient of cost function.
+        '''
+        if self.costfunc == 'logistic':
+            cost, grad = costLogistic(self[-1].A, Y)
+        elif self.costfunc == 'mse':
+            cost, grad = costMSE(self[-1].A, Y)
+        return cost, grad
+
+    def forwardprop(self, X):
+        '''
+        DESCRIPTION:
+        Loops through each layer of a network and calls that layer's self.forward()
+        method. Starts with first layer in network (network[0]) and passes data 'X'
+        as its parameter. Each subsequent layer receives the activations of the
+        previous layer as a parameter.
+
+        PARAMETERS:
+        self -- [num_layers] List of neuron layers.
+        X -- [num_features, m_samples] Input data set.
+
+        RETURNS:
+        None
+        '''
+        L = len(self)
+        self[0].forward(X)
+
+        for i in range(1, L):
+            self[i].forward(self[i-1].A)
+
+    def gradientDescent(self, X, Y, num_iterations, learning_rate,
+                        costfunction='logistic', showprogress=True,
+                        debugmsg='', recording=False):
+        '''
+        DESCRIPTION:
+        Performs gradientDescent on each layer of neural network. Computes cost and
+        accuracy for graphing vs. epoch.
+
+        PARAMETERS:
+        self -- [num_layers] List of neuron layers.
+        X -- [num_features, m_samples] Input data set.
+        Y -- [num_target_classes, m_samples] Target labels.
+        num_iterations -- (int) Number of epochs through which to iterate.
+        learning_rate -- (float) Determines gradient descent step size.
+        costfunction -- (str) Selects cost function.
+        showprogress -- (bool) Toggles progress bar.
+        debugmsg -- (str) Selects info to display with progress bar. For complete
+                        list of options, see msgGradDesc().
+        recording -- (bool) Toggles calculating accuracy during each epoch. Provides
+                        interesting accuracy vs. epoch data, but increases run time.
+
+        RETURNS:
+        self -- [num_layers] List of neuron layers.
+        costs -- [num_iterations] List of cost function outputs vs. epoch.
+        accs -- [num_iterations] List of accuracies vs. epoch. Outputs a list of
+                    zeros if 'recording' is set to 'False'.
+        '''
+        L = len(self)
+        costs = np.zeros((num_iterations))
+        accs = np.zeros((num_iterations))
+
+        for epoch in range(num_iterations):
+            # Prepare neuron layers for gradient descent step update.
+            self.forwardprop( X)
+            costs[epoch], grad = self.computeCost(Y)
+            self.backprop(grad, X)
+
+            # Record accuracy, precision, and recall of model in current state.
+            if recording:
+                H = self.predict(X)
+                accs[epoch], prec, rec = evaluateModel(H, Y)
+
+            # Perform one step of gradient descent.
+            for i in range(0, L):
+                self[i].update(learning_rate)
+
+            # Display progress bar and a message if specified.
+            if showprogress == True:
+                msg = ''
+                if debugmsg != '':
+                    msg = self.msgGradDesc(debugmsg, grad, H, epoch,
+                                      costs, accs)
+                update_progress(epoch/num_iterations, str(msg))
+
+        # Show completed progress bar.
+        if showprogress == True:
+            update_progress(1)
+
+        return self, costs, accs
+
+    def msgGradDesc(self, debugmsg, grad, H, epoch, costs, accs):
+        '''
+        DESCRIPTION:
+        Interprets debugmsg keyword for gradientDescent() and outputs corresponding
+        information as a string.
+
+        PARAMETERS:
+        Internal parameters of gradientDescent().
+
+        RETURNS:
+        msg -- (str) Debugging message to be displayed during gradient descent.
+        '''
+        if debugmsg == '':
+            msg = ''
+        elif debugmsg == 'grad':
+            msg = grad
+        elif debugmsg == 'H':
+            msg = H
+        elif debugmsg == 'cost':
+            msg = costs[epoch]
+        elif debugmsg == 'acc':
+            msg = accs[epoch]
+        elif debugmsg == 'last.A':
+            msg = self[-1].A
+        elif debugmsg == 'last.Z':
+            msg = self[-1].Z
+        elif debugmsg == 'last.W':
+            msg = self[-1].W
+        elif debugmsg == 'last.b':
+            msg = self[-1].b
+        elif debugmsg == 'last.dA':
+            msg = self[-1].dA
+        elif debugmsg == 'last.dZ':
+            msg = self[-1].dZ
+        elif debugmsg == 'last.dW':
+            msg = self[-1].dW
+        elif debugmsg == 'last.db':
+            msg = self[-1].db
+        elif debugmsg == 'first.A':
+            msg = self[0].A
+        elif debugmsg == 'first.Z':
+            msg = self[0].Z
+        elif debugmsg == 'first.W':
+            msg = self[0].W
+        elif debugmsg == 'first.b':
+            msg = self[0].b
+        elif debugmsg == 'first.dA':
+            msg = self[0].dA
+        elif debugmsg == 'first.dZ':
+            msg = self[0].dZ
+        elif debugmsg == 'first.dW':
+            msg = self[0].dW
+        elif debugmsg == 'first.db':
+            msg = self[0].db
+        return msg
+
+    def predict(self, X):
+        '''
+        DESCRIPTION:
+        Converts output of last layer of neural network to binary class predictions.
+
+        PARAMETERS:
+        self -- [num_layers] List of neuron layers.
+        X -- [num_features, m_samples] Input data set.
+
+        RETURNS:
+        self.predicted -- [num_target_classes, m_samples] Array of 1's and 0's representing
+                            predicted values for each target class.
+        '''
+        # Make copy of network that won't alter original network.
+        network = copy.deepcopy(self)
+
+        # Forward propagation
+        network.forwardprop(X)
+        H = network[-1].A
+
+        # Compute predictions
+        self.predicted = np.zeros(H.shape)
+        if network[-1].act == 'sigmoid':
+            self.predicted = 1*(H > 0.5)
+        elif network[-1].act == 'tanh':
+            self.predicted = 1*(H > 0)
+
+        return self.predicted
+
 def arrayMemorySize(x, base=10):
     '''
     DESCRIPTION:
@@ -142,42 +369,6 @@ def arrayMemorySize(x, base=10):
 
     print(np.shape(x), 'array uses', round(x.nbytes/base**power, 2), unit)
 
-def backprop(grad, X, network):
-    '''
-    DESCRIPTION:
-    Loops through each layer of a network and calls that layer's self.backward()
-    method. Starts with last layer in network (network[-1]) and passes 'grad' as
-    its parameter. Last layer also receives an identity matrix 'W_output' as a
-    parameter in order to give a one-to-one mapping for the last layer and the
-    cost function. Each preceding layer receives the gradient of the following
-    layer as a parameter.
-
-    PARAMETERS:
-    grad -- [num_output_neurons, m_samples] Gradient of cost function.
-    X -- [num_features, m_samples] Input data set.
-    network -- [num_layers] List of neuron layers.
-
-    RETURNS:
-    None
-    '''
-    L = len(network)
-    W_output = np.eye(network[-1].A.shape[0], network[-1].A.shape[0])
-
-    if L == 1:
-        A_prev = X
-    else:
-        A_prev = network[L-2].A
-    network[L-1].backward(W_output, grad, A_prev)
-
-    for i in reversed(range(0, L - 1)):
-        W_next = network[i+1].W
-        dZ_next = network[i+1].dZ
-        if i == 0:
-            A_prev = X
-        else:
-            A_prev = network[i-1].A
-        network[i].backward(W_next, dZ_next, A_prev)
-
 def buildNetwork(layout, num_features):
     '''
     DESCRIPTION:
@@ -191,7 +382,7 @@ def buildNetwork(layout, num_features):
     RETURNS:
     network -- [num_layers,:] List of layers, each with number of neurons specified in 'network'.
     '''
-    network = []
+    network = Network()
     network.append(Layer(num_features, layout[0][0], activation_function=layout[0][1]))
     print('Layer 1:', layout[0])
 
@@ -203,26 +394,6 @@ def buildNetwork(layout, num_features):
         print('Layer', i+1, '\b:', layout[i])
 
     return network
-
-def computeCost(Y, network, costfunc='logistic'):
-    '''
-    DESCRIPTION:
-    Selects cost function routine to execute.
-
-    PARAMETERS:
-    Y -- [1, m_samples] Target labels.
-    network -- [num_layers] List of neuron layers.
-    costfunc -- (str) Selects cost function.
-
-    RETURNS:
-    cost -- (float) Cost function output.
-    grad -- [1, m_samples] Gradient of cost function.
-    '''
-    if costfunc == 'logistic':
-        cost, grad = costLogistic(network[-1].A, Y)
-    elif costfunc == 'mse':
-        cost, grad = costMSE(network[-1].A, Y)
-    return cost, grad
 
 def costLogistic(H, Y):
     '''
@@ -274,6 +445,7 @@ def evaluateModel(H, Y, decimal=3):
     PARAMETERS:
     H -- [num_target_classes, m_samples] One-hot class predictions.
     Y -- [num_target_classes, m_samples] One-hot target labels.
+    decimal -- (int) Specifies number of decimal places to round to.
 
     RETURNS:
     accuracy -- [num_classes, 1] Ratio of H predictions that match Y.
@@ -293,87 +465,6 @@ def evaluateModel(H, Y, decimal=3):
     recall = np.around(tp / (tp + fn + eps), decimal)
 
     return accuracy, precision, recall
-
-def forwardprop(X, network):
-    '''
-    DESCRIPTION:
-    Loops through each layer of a network and calls that layer's self.forward()
-    method. Starts with first layer in network (network[0]) and passes data 'X'
-    as its parameter. Each subsequent layer receives the activations of the
-    previous layer as a parameter.
-
-    PARAMETERS:
-    X -- [num_features, m_samples] Input data set.
-    network -- [num_layers] List of neuron layers.
-
-    RETURNS:
-    None
-    '''
-    L = len(network)
-    network[0].forward(X)
-
-    for i in range(1, L):
-        network[i].forward(network[i-1].A)
-
-def gradientDescent(X, Y, network, num_iterations, learning_rate,
-                    costfunction='logistic', showprogress=True,
-                    debugmsg='', recording=False):
-    '''
-    DESCRIPTION:
-    Performs gradientDescent on each layer of neural network. Computes cost and
-    accuracy for graphing vs. epoch.
-
-    PARAMETERS:
-    X -- [num_features, m_samples] Input data set.
-    Y -- [num_target_classes, m_samples] Target labels.
-    network -- [num_layers] List of neuron layers.
-    num_iterations -- (int) Number of epochs through which to iterate.
-    learning_rate -- (float) Determines gradient descent step size.
-    costfunction -- (str) Selects cost function.
-    showprogress -- (bool) Toggles progress bar.
-    debugmsg -- (str) Selects info to display with progress bar. For complete
-                    list of options, see msgGradDesc().
-    recording -- (bool) Toggles calculating accuracy during each epoch. Provides
-                    interesting accuracy vs. epoch data, but increases run time.
-
-    RETURNS:
-    network -- [num_layers] List of neuron layers.
-    costs -- [num_iterations] List of cost function outputs vs. epoch.
-    accs -- [num_iterations] List of accuracies vs. epoch. Outputs a list of
-                zeros if 'recording' is set to 'False'.
-    '''
-    L = len(network)
-    costs = np.zeros((num_iterations))
-    accs = np.zeros((num_iterations))
-
-    for epoch in range(num_iterations):
-        # Prepare neuron layers for gradient descent step update.
-        forwardprop(X, network)
-        costs[epoch], grad = computeCost(Y, network, costfunc=costfunction)
-        backprop(grad, X, network)
-
-        # Record accuracy, precision, and recall of model in current state.
-        if recording:
-            H = predict(X, network)
-            accs[epoch], prec, rec = evaluateModel(H, Y)
-
-        # Perform one step of gradient descent.
-        for i in range(0, L):
-            network[i].update(learning_rate)
-
-        # Display progress bar and a message if specified.
-        if showprogress == True:
-            msg = ''
-            if debugmsg != '':
-                msg = msgGradDesc(debugmsg, grad, H, epoch,
-                                  costs, accs, network)
-            update_progress(epoch/num_iterations, str(msg))
-
-    # Show completed progress bar.
-    if showprogress == True:
-        update_progress(1)
-
-    return network, costs, accs
 
 def loadCSVData(filename, labelcol=-1, usecols=None, skiprow=0):
     '''
@@ -401,62 +492,6 @@ def loadCSVData(filename, labelcol=-1, usecols=None, skiprow=0):
 
     return xdat, ydat
 
-def msgGradDesc(debugmsg, grad, H, epoch, costs, accs, network):
-    '''
-    DESCRIPTION:
-    Interprets debugmsg keyword for gradientDescent() and outputs corresponding
-    information as a string.
-
-    PARAMETERS:
-    Internal parameters of gradientDescent().
-
-    RETURNS:
-    msg -- (str) Debugging message to be displayed during gradient descent.
-    '''
-    if debugmsg == '':
-        msg = ''
-    elif debugmsg == 'grad':
-        msg = grad
-    elif debugmsg == 'H':
-        msg = H
-    elif debugmsg == 'cost':
-        msg = costs[epoch]
-    elif debugmsg == 'acc':
-        msg = accs[epoch]
-    elif debugmsg == 'last.A':
-        msg = network[-1].A
-    elif debugmsg == 'last.Z':
-        msg = network[-1].Z
-    elif debugmsg == 'last.W':
-        msg = network[-1].W
-    elif debugmsg == 'last.b':
-        msg = network[-1].b
-    elif debugmsg == 'last.dA':
-        msg = network[-1].dA
-    elif debugmsg == 'last.dZ':
-        msg = network[-1].dZ
-    elif debugmsg == 'last.dW':
-        msg = network[-1].dW
-    elif debugmsg == 'last.db':
-        msg = network[-1].db
-    elif debugmsg == 'first.A':
-        msg = network[0].A
-    elif debugmsg == 'first.Z':
-        msg = network[0].Z
-    elif debugmsg == 'first.W':
-        msg = network[0].W
-    elif debugmsg == 'first.b':
-        msg = network[0].b
-    elif debugmsg == 'first.dA':
-        msg = network[0].dA
-    elif debugmsg == 'first.dZ':
-        msg = network[0].dZ
-    elif debugmsg == 'first.dW':
-        msg = network[0].dW
-    elif debugmsg == 'first.db':
-        msg = network[0].db
-    return msg
-
 def plot2DBoundary(X, Y, network, fill=False, lines=True,
                     color_map=plt.cm.Spectral, mark='o', marksize=20):
     '''
@@ -482,7 +517,7 @@ def plot2DBoundary(X, Y, network, fill=False, lines=True,
     a, b = np.meshgrid(x1, x2)
 
     c = np.c_[a.ravel(), b.ravel()].T
-    Z = predict(c, network)
+    Z = network.predict(c)
     Z = Z.reshape(a.shape)
 
     if fill:
@@ -494,35 +529,6 @@ def plot2DBoundary(X, Y, network, fill=False, lines=True,
     plt.xlim(X[0].min(), X[0].max())
     plt.ylim(X[1].min(), X[1].max())
     plt.show()
-
-def predict(X, original_network):
-    '''
-    DESCRIPTION:
-    Converts output of last layer of neural network to binary class predictions.
-
-    PARAMETERS:
-    X -- [num_features, m_samples] Input data set.
-    original_network -- [num_layers] List of neuron layers.
-
-    RETURNS:
-    predicted -- [num_target_classes, m_samples] Array of 1's and 0's representing
-                 predicted values for each target class.
-    '''
-    # Make copy of network that won't alter original network.
-    network = copy.deepcopy(original_network)
-
-    # Forward propagation
-    forwardprop(X, network)
-    H = network[-1].A
-
-    # Compute predictions
-    predicted = np.zeros(H.shape)
-    if network[-1].act == 'sigmoid':
-        predicted = 1*(H > 0.5)
-    elif network[-1].act == 'tanh':
-        predicted = 1*(H > 0)
-
-    return predicted
 
 def sigmoid(z):
     return 1 / (1 + np.exp(-z))
