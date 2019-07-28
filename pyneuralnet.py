@@ -115,9 +115,9 @@ class Layer(object):
         self.b = self.b - learning_rate * self.db
 
 class Network(list):
-    def __init__(self):
-        self.costfunc = 'logistic'
-        self.reg = 'L2'
+    def __init__(self, cost, reg):
+        self.costfunction = cost
+        self.regularization = reg
 
     def backprop(self, grad, X):
         '''
@@ -169,9 +169,9 @@ class Network(list):
         cost -- (float) Cost function output.
         grad -- [1, m_samples] Gradient of cost function.
         '''
-        if self.costfunc == 'logistic':
+        if self.costfunction == 'logistic':
             cost, grad = costLogistic(self[-1].A, Y)
-        elif self.costfunc == 'mse':
+        elif self.costfunction == 'mse':
             cost, grad = costMSE(self[-1].A, Y)
         return cost, grad
 
@@ -255,6 +255,12 @@ class Network(list):
             update_progress(1)
 
         return self, costs, accs
+
+    def info(self):
+        print('Cost Function: ', self.costfunction)
+        print('Regularization:', self.regularization)
+        for i in range(len(self)):
+            print('Layer', i, '\b:', self.layout[i])
 
     def msgGradDesc(self, debugmsg, grad, H, epoch, costs, accs):
         '''
@@ -369,7 +375,7 @@ def arrayMemorySize(x, base=10):
 
     print(np.shape(x), 'array uses', round(x.nbytes/base**power, 2), unit)
 
-def buildNetwork(layout, num_features):
+def buildNetwork(layout, num_features, cost='logistic', reg='L2'):
     '''
     DESCRIPTION:
     Constructs list of neuron layers.
@@ -382,17 +388,17 @@ def buildNetwork(layout, num_features):
     RETURNS:
     network -- [num_layers,:] List of layers, each with number of neurons specified in 'network'.
     '''
-    network = Network()
+    network = Network(cost, reg)
+    network.layout = layout
     network.append(Layer(num_features, layout[0][0], activation_function=layout[0][1]))
-    print('Layer 1:', layout[0])
 
     for i in range(1, len(layout)):
         num_prev = layout[i-1][0]
         num_neurons = layout[i][0]
         activation_function = layout[i][1]
         network.append(Layer(num_prev, num_neurons, activation_function))
-        print('Layer', i+1, '\b:', layout[i])
 
+    network.info()
     return network
 
 def costLogistic(H, Y):
