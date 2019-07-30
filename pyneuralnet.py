@@ -23,48 +23,25 @@ class Layer(object):
         None
         '''
         self.n = num_neurons
+        self.n_prev = num_prev
         self.act = activation_function
 
         self.A = np.zeros((num_neurons,1))
         self.Z = np.zeros((num_neurons,1))
         self.b = np.zeros((self.n,1))
 
-        # He initialization.
-        if self.act == 'sigmoid':
-            self.W = np.random.randn(num_neurons, num_prev)
-            self.W = self.W * np.sqrt(2.0/num_prev)
-        # Xavier initialization
-        elif self.act == 'tanh':
-            self.W = np.random.randn(num_neurons, num_prev)
-            self.W = self.W * np.sqrt(1.0/num_prev)
+        # Uniform He initialization
+        if self.act == 'relu' or self.act == 'leaky_relu':
+            self.initWeights('He-uniform')
 
+        # Uniform Xavier initialization
+        elif self.act == 'sigmoid' or self.act == 'tanh':
+            self.initWeights('Xavier-normal')
 
         self.dA = np.zeros((num_neurons,1))
         self.dZ = np.zeros((num_neurons,1))
         self.db = np.zeros((self.n,1))
         self.dW = np.zeros((num_neurons, num_prev))
-
-    def forward(self, A_prev):
-        '''
-        DESCRIPTION:
-        Perform forward pass by computing Z, then A.
-
-        PARAMETERS:
-        A_prev -- [num_prev, m_samples] Array of activations from previous layer.
-
-        RETURNS:
-        None
-        '''
-        self.Z = self.W @ A_prev + self.b
-
-        if self.act == 'linear':
-            self.A = self.Z
-
-        elif self.act == 'sigmoid':
-            self.A = 1 / (1 + np.exp(-self.Z))
-
-        elif self.act == 'tanh':
-            self.A = np.tanh(self.Z)
 
     def backward(self, W_next, dZ_next, A_prev):
         '''
@@ -99,6 +76,60 @@ class Layer(object):
 
         self.dW = 1 / m * self.dZ @ A_prev.T
         self.db = 1 / m * np.sum(self.dZ, axis=1, keepdims=True)
+
+    def forward(self, A_prev):
+        '''
+        DESCRIPTION:
+        Perform forward pass by computing Z, then A.
+
+        PARAMETERS:
+        A_prev -- [num_prev, m_samples] Array of activations from previous layer.
+
+        RETURNS:
+        None
+        '''
+        self.Z = self.W @ A_prev + self.b
+
+        if self.act == 'linear':
+            self.A = self.Z
+
+        elif self.act == 'sigmoid':
+            self.A = 1 / (1 + np.exp(-self.Z))
+
+        elif self.act == 'tanh':
+            self.A = np.tanh(self.Z)
+
+    def initWeights(self, scheme):
+        errmsg = ('Cannot re-initialize weights: '
+                  + 'network has already started training.')
+        assert np.count_nonzero(self.A) == 0, errmsg
+
+        self.scheme = scheme
+
+        # Normal He initialization.
+        if scheme == 'He-normal':
+            self.W = np.random.randn(self.n, self.n_prev)
+            self.W = self.W * np.sqrt(2.0/self.n_prev)
+        # Uniform He initialization.
+        elif scheme == 'He-uniform':
+            self.W = 2 * np.random.rand(self.n, self.n_prev) - 1
+            self.W = self.W * np.sqrt(6.0/self.n_prev)
+        # Normal LeCun initialization
+        elif scheme == 'LeCun-normal':
+            self.W = np.random.randn(self.n, self.n_prev)
+            self.W = self.W * np.sqrt(1.0/self.n)
+        # Uniform LeCun initialization
+        elif scheme == 'LeCun-uniform':
+            self.W = 2 * np.random.rand(self.n, self.n_prev) - 1
+            self.W = self.W * np.sqrt(3.0/self.n)
+        # Normal Xavier initialization
+        elif scheme == 'Xavier-normal':
+            self.W = np.random.randn(self.n, self.n_prev)
+            self.W = self.W * np.sqrt(2.0/(self.n_prev + self.n))
+        # Uniform Xavier initialization
+        elif scheme == 'Xavier-uniform':
+            self.W = 2 * np.random.rand(self.n, self.n_prev) - 1
+            self.W = self.W * np.sqrt(6.0/(self.n_prev + self.n))
 
     def update(self, learning_rate):
         '''
@@ -260,7 +291,7 @@ class Network(list):
         print('Cost Function: ', self.costfunction)
         print('Regularization:', self.regularization)
         for i in range(len(self)):
-            print('Layer', i, '\b:', self.layout[i])
+            print('Layer', i, '\b:', self.layout[i], self[i].scheme)
 
     def msgGradDesc(self, debugmsg, grad, H, epoch, costs, accs):
         '''
