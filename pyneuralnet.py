@@ -216,24 +216,26 @@ class Network(list):
                 A_prev = self[i-1].A
             self[i].backward(W_next, dZ_next, A_prev)
 
-    def computeCost(self, Y):
+    def computeCost(self, Yhot):
         '''
         DESCRIPTION:
         Selects cost function routine to execute.
 
         PARAMETERS:
         self -- [num_layers] List of neuron layers.
-        Y -- [1, m_samples] Target labels.
+        Yhot -- [k_classes, m_samples] Target labels.
         costfunc -- (str) Selects cost function.
 
         RETURNS:
         cost -- (float) Cost function output.
-        grad -- [1, m_samples] Gradient of cost function.
+        grad -- [k_classes, m_samples] Gradient of cost function.
         '''
         if self.costfunction == 'logistic':
-            cost, grad = costLogistic(self[-1].A, Y)
+            cost, grad = costLogistic(self[-1].A, Yhot)
         elif self.costfunction == 'mse':
-            cost, grad = costMSE(self[-1].A, Y)
+            errmsg = "Cost function 'MSE' not designed for classification."
+            assert Yhot.shape[0] == 1, errmsg
+            cost, grad = costMSE(self[-1].A, Yhot)
         return cost, grad
 
     def forwardprop(self, X):
@@ -257,7 +259,7 @@ class Network(list):
         for i in range(1, L):
             self[i].forward(self[i-1].A)
 
-    def gradientDescent(self, X, Y, num_iterations, learning_rate,
+    def gradientDescent(self, X, Yhot, num_iterations, learning_rate,
                         costfunction='logistic', showprogress=True,
                         debugmsg='', recording=False):
         '''
@@ -268,7 +270,7 @@ class Network(list):
         PARAMETERS:
         self -- [num_layers] List of neuron layers.
         X -- [num_features, m_samples] Input data set.
-        Y -- [num_target_classes, m_samples] Target labels.
+        Yhot -- [k_classes, m_samples] Target labels.
         num_iterations -- (int) Number of epochs through which to iterate.
         learning_rate -- (float) Determines gradient descent step size.
         costfunction -- (str) Selects cost function.
@@ -290,14 +292,14 @@ class Network(list):
 
         for epoch in range(num_iterations):
             # Prepare neuron layers for gradient descent step update.
-            self.forwardprop( X)
-            costs[epoch], grad = self.computeCost(Y)
+            self.forwardprop(X)
+            costs[epoch], grad = self.computeCost(Yhot)
             self.backprop(grad, X)
 
             # Record accuracy, precision, and recall of model in current state.
             if recording:
                 H = self.predict(X)
-                accs[epoch], prec, rec = evaluateModel(H, Y)
+                accs[epoch], prec, rec = evaluateModel(H, Yhot)
 
             # Perform one step of gradient descent.
             for i in range(0, L):
@@ -389,7 +391,7 @@ class Network(list):
         X -- [num_features, m_samples] Input data set.
 
         RETURNS:
-        self.predicted -- [num_target_classes, m_samples] Array of 1's and 0's representing
+        self.predicted -- [k_classes, m_samples] Array of 1's and 0's representing
                             predicted values for each target class.
         '''
         # Make copy of network that won't alter original network.
@@ -479,21 +481,26 @@ def costLogistic(H, Y):
     Comptutes cross entropy 'logistic' cost and gradient.
 
     PARAMETERS:
-    H -- [1, m_samples] Predicted values in range (0, 1).
-    Y -- [1, m_samples] Target labels, either 0 or 1.
-
+    H -- [k_classes, m_samples] Predicted values in range (0, 1).
+    Y -- [k_classes, m_samples] One-hot target labels.
     RETURNS:
     J -- (float) Logistic cost of dataset.
-    grad -- [1, m_samples] Gradient of cost w.r.t. predicted values.
-                NOTE: grad must be [1, m] because backpropagation will sum over
+    grad -- [k_classes, m_samples] Gradient of cost w.r.t. predicted values.
+                NOTE: grad must be [:, m] because backpropagation will sum over
                 axis=1 and then divide by m_samples to get an average for
                 updating network[?].W and network[?].b.
-
     '''
+    k = Y.shape[0]
     m = Y.shape[1]
     Y = Y.astype('float32')
-    J = -1 / m * (Y @ np.log(H.T) + (1 - Y) @ np.log(1 - H.T))
-    grad = np.divide((H - Y), H * (1 - H))
+    # Efficient calculation for binary classification.
+    if k == 1:
+        J = -1 / m * (Y @ np.log(H.T) + (1 - Y) @ np.log(1 - H.T))
+        grad = np.divide((H - Y), H * (1 - H))
+    # Calculation for multi-class classification
+    else:
+        J = -1 / m * np.sum(Y * np.log(H) + (1 - Y) * np.log(1 - H))
+        grad = np.divide((H - Y), H * (1 - H))
     return J, grad
 
 def costMSE(H, Y):
@@ -521,14 +528,14 @@ def evaluateModel(H, Y, decimal=3):
     Computes accuracy, precision, and recall model H and target Y.
 
     PARAMETERS:
-    H -- [num_target_classes, m_samples] One-hot class predictions.
-    Y -- [num_target_classes, m_samples] One-hot target labels.
+    H -- [k_classes, m_samples] One-hot class predictions.
+    Y -- [k_classes, m_samples] One-hot target labels.
     decimal -- (int) Specifies number of decimal places to round to.
 
     RETURNS:
-    accuracy -- [num_classes, 1] Ratio of H predictions that match Y.
-    precision -- [num_classes, 1] Ratio of true positives to flagged positives.
-    recall -- [num_classes, 1] Ratio of flagged positives to total positives.
+    accuracy -- [k_classes, 1] Ratio of H predictions that match Y.
+    precision -- [k_classes, 1] Ratio of true positives to flagged positives.
+    recall -- [k_classes, 1] Ratio of flagged positives to total positives.
     '''
     k = Y.shape[1]
     eps = 1e-8
@@ -569,6 +576,28 @@ def loadCSVData(filename, labelcol=-1, usecols=None, skiprow=0):
     ydat = ydat.reshape(m,1)
 
     return xdat, ydat
+
+def oneHot(num_classes, Y):
+    '''
+    DESCRIPTION:
+    Converts integer labels to one-hot labels.
+
+    PARAMETERS:
+    num_classes -- (int) Number of different classes represented in data.
+    Y -- [1, m_samples] Label data, with each label as an integer.
+
+    RETURNS:
+    Yhot -- [k_classes, m_samples] One-hot labels.
+    '''
+    k = num_classes
+    m = Y.shape[1]
+    labels = Y.astype(int)
+    Yhot = np.zeros((k, m))
+
+    for i in range(m):
+        Yhot[labels[0,i], i] = 1.
+
+    return Yhot
 
 def plot2DBoundary(X, Y, network, fill=False, lines=True,
                     color_map=plt.cm.Spectral, mark='o', marksize=20):
