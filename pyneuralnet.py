@@ -26,17 +26,21 @@ class Layer(object):
         self.n_prev = num_prev
         self.act = activation_function
 
+        # Set default activation parameter (only useful for ReLU's).
+        if self.act == 'leaky_relu':
+            self.coef = 0.01
+        else:
+            self.coef = 1.
+
         self.A = np.zeros((num_neurons,1))
         self.Z = np.zeros((num_neurons,1))
         self.b = np.zeros((self.n,1))
 
-        # Uniform He initialization
-        if self.act == 'relu' or self.act == 'leaky_relu':
-            self.initWeights('He-uniform')
-
-        # Uniform Xavier initialization
-        elif self.act == 'sigmoid' or self.act == 'tanh':
+        # Default weight initialization schemes.
+        if self.act == 'sigmoid' or self.act == 'tanh':
             self.initWeights('Xavier-normal')
+        else:
+            self.initWeights('He-uniform')
 
         self.dA = np.zeros((num_neurons,1))
         self.dZ = np.zeros((num_neurons,1))
@@ -67,12 +71,21 @@ class Layer(object):
 
         if self.act == 'linear':
             self.dZ = self.dA * 1
-
         elif self.act == 'sigmoid':
             self.dZ = self.dA * self.A * (1 - self.A)
-
         elif self.act == 'tanh':
             self.dZ = self.dA * (1 - self.A**2)
+        elif self.act == 'relu':
+            self.dZ = self.dA * (self.Z >= 0)
+        elif self.act == 'leaky_relu':
+            temp = (self.Z >= 0)
+            self.dZ = self.dA * (temp * 1. + (1 - temp) * 0.01)
+        elif self.act == 'prelu':
+            temp = (self.Z >= 0)
+            self.dZ = self.dA * (temp * 1. + (1 - temp) * self.coef)
+        elif self.act == 'elu':
+            temp = (self.Z > 0)
+            self.dZ = self.dA * (temp * 1. + (1 - temp) * (self.A + self.coef))
 
         self.dW = 1 / m * self.dZ @ A_prev.T
         self.db = 1 / m * np.sum(self.dZ, axis=1, keepdims=True)
@@ -92,14 +105,31 @@ class Layer(object):
 
         if self.act == 'linear':
             self.A = self.Z
-
         elif self.act == 'sigmoid':
             self.A = 1 / (1 + np.exp(-self.Z))
-
         elif self.act == 'tanh':
             self.A = np.tanh(self.Z)
+        elif self.act == 'relu':
+            self.A = self.Z * (self.Z >= 0)
+        elif self.act == 'leaky_relu' or self.act == 'prelu':
+            temp = (self.Z >= 0)
+            self.A = self.Z * (temp * 1. + (1 - temp) * self.coef)
+        elif self.act == 'elu':
+            temp = (self.Z > 0)
+            self.A = temp * self.Z
+            self.A = self.A + (1 - temp) * self.coef * (np.exp(self.Z) - 1)
 
     def initWeights(self, scheme):
+        '''
+        DESCRIPTION:
+        Initializes weights according to specified scheme.
+
+        PARAMTERS:
+        scheme -- (str) Initialization scheme.
+
+        RETURNS:
+        None
+        '''
         errmsg = ('Cannot re-initialize weights: '
                   + 'network has already started training.')
         assert np.count_nonzero(self.A) == 0, errmsg
@@ -140,7 +170,7 @@ class Layer(object):
         learning_rate -- (float) Determines gradient step size.
 
         RETURNS:
-        None7
+        None
         '''
         self.W = self.W - learning_rate * self.dW
         self.b = self.b - learning_rate * self.db
@@ -409,25 +439,36 @@ def arrayMemorySize(x, base=10):
 def buildNetwork(layout, num_features, cost='logistic', reg='L2'):
     '''
     DESCRIPTION:
-    Constructs list of neuron layers.
+    Constructs list of neuron layers. Displays layout of network.
 
     PARAMETERS:
-    layout -- [num_layers, 2] Tuple where first column contains number of neurons in each layer
-                and second column contains activation functions for each layer.
+    layout -- [num_layers, 2] Tuple where first column contains number of
+                              neurons in each layer and second column contains
+                              activation functions for each layer.
     num_features -- (int) Number of features in the input data set.
 
     RETURNS:
-    network -- [num_layers,:] List of layers, each with number of neurons specified in 'network'.
+    network -- [num_layers,:] List of layers, each with number of neurons
+                              specified in 'network'.
     '''
     network = Network(cost, reg)
     network.layout = layout
-    network.append(Layer(num_features, layout[0][0], activation_function=layout[0][1]))
 
-    for i in range(1, len(layout)):
-        num_prev = layout[i-1][0]
+    for i in range(0, len(layout)):
+        # If first layer, use num_features as "previous" number of neurons.
+        if i == 0:
+            num_prev = num_features
+        else:
+            num_prev = layout[i-1][0]
+
+        # Append layer to network.
         num_neurons = layout[i][0]
         activation_function = layout[i][1]
         network.append(Layer(num_prev, num_neurons, activation_function))
+
+        # If activation function has a parameter, store parameter in Layer.coef.
+        if len(layout[i]) == 3:
+            network[i].coef = layout[i][2]
 
     network.info()
     return network
