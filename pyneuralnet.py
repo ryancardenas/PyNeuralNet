@@ -47,7 +47,7 @@ class Layer(object):
         self.db = np.zeros((self.n,1))
         self.dW = np.zeros((num_neurons, num_prev))
 
-    def backward(self, W_next, dZ_next, A_prev):
+    def backward(self, W_next, dZ_next, A_prev, reg='', lamb=0):
         '''
         DESCRIPTION:
         Compute dA first, then dZ, then dW and db.
@@ -62,6 +62,8 @@ class Layer(object):
                     next layer.
         dZ_next -- [num_next, m_samples] Array of linear inputs to next layer.
         A_prev -- [num_prev,m_samples] Array of activations from previous layer.
+        reg -- (str) Regularization scheme.
+        lamb -- (float) Regularization parameter.
 
         RETURNS:
         None
@@ -88,6 +90,10 @@ class Layer(object):
             self.dZ = self.dA * (temp * 1. + (1 - temp) * (self.A + self.coef))
 
         self.dW = 1 / m * self.dZ @ A_prev.T
+        if reg == 'L1':
+            self.dW = self.dW + lamb / m * (self.W / np.abs(self.W))
+        elif reg == 'L2':
+            self.dW = self.dW + lamb / m * self.W
         self.db = 1 / m * np.sum(self.dZ, axis=1, keepdims=True)
 
     def forward(self, A_prev):
@@ -178,17 +184,18 @@ class Layer(object):
 class Network(list):
     def __init__(self, cost, reg):
         self.costfunction = cost
-        self.regularization = reg
+        self.reg = reg
+        self.lamb = 1
 
     def backprop(self, grad, X):
         '''
         DESCRIPTION:
-        Loops through each layer of a network and calls that layer's self.backward()
-        method. Starts with last layer in network (network[-1]) and passes 'grad' as
-        its parameter. Last layer also receives an identity matrix 'W_output' as a
-        parameter in order to give a one-to-one mapping for the last layer and the
-        cost function. Each preceding layer receives the gradient of the following
-        layer as a parameter.
+        Loops through each layer of a network and calls that layer's
+        self.backward() method. Starts with last layer in network (network[-1])
+        and passes 'grad' as its parameter. Last layer also receives an identity
+        matrix 'W_output' as a parameter in order to give a one-to-one mapping
+        for the last layer and the cost function. Each preceding layer receives
+        the gradient of the following layer as a parameter.
 
         PARAMETERS:
         self -- [num_layers] List of neuron layers.
@@ -205,7 +212,9 @@ class Network(list):
             A_prev = X
         else:
             A_prev = self[L-2].A
-        self[L-1].backward(W_output, grad, A_prev)
+        self[L-1].backward(W_output, grad, A_prev,
+                            reg=self.reg,
+                            lamb=self.lamb)
 
         for i in reversed(range(0, L - 1)):
             W_next = self[i+1].W
@@ -214,7 +223,9 @@ class Network(list):
                 A_prev = X
             else:
                 A_prev = self[i-1].A
-            self[i].backward(W_next, dZ_next, A_prev)
+            self[i].backward(W_next, dZ_next, A_prev,
+                                reg=self.reg,
+                                lamb=self.lamb)
 
     def computeCost(self, Yhot):
         '''
@@ -264,8 +275,8 @@ class Network(list):
                         debugmsg='', recording=False):
         '''
         DESCRIPTION:
-        Performs gradientDescent on each layer of neural network. Computes cost and
-        accuracy for graphing vs. epoch.
+        Performs gradientDescent on each layer of neural network. Computes cost
+        and accuracy for graphing vs. epoch.
 
         PARAMETERS:
         self -- [num_layers] List of neuron layers.
@@ -275,10 +286,11 @@ class Network(list):
         learning_rate -- (float) Determines gradient descent step size.
         costfunction -- (str) Selects cost function.
         showprogress -- (bool) Toggles progress bar.
-        debugmsg -- (str) Selects info to display with progress bar. For complete
-                        list of options, see msgGradDesc().
-        recording -- (bool) Toggles calculating accuracy during each epoch. Provides
-                        interesting accuracy vs. epoch data, but increases run time.
+        debugmsg -- (str) Selects info to display with progress bar. For
+                        complete list of options, see msgGradDesc().
+        recording -- (bool) Toggles calculating accuracy during each epoch.
+                        Provides interesting accuracy vs. epoch data, but
+                        increases run time.
 
         RETURNS:
         self -- [num_layers] List of neuron layers.
@@ -321,7 +333,7 @@ class Network(list):
 
     def info(self):
         print('Cost Function: ', self.costfunction)
-        print('Regularization:', self.regularization)
+        print('Regularization:', self.reg)
         for i in range(len(self)):
             print('Layer', i, '\b:', self.layout[i], self[i].scheme)
 
@@ -438,7 +450,7 @@ def arrayMemorySize(x, base=10):
 
     print(np.shape(x), 'array uses', round(x.nbytes/base**power, 2), unit)
 
-def buildNetwork(layout, num_features, cost='logistic', reg='L2'):
+def buildNetwork(layout, num_features, cost='logistic', reg=''):
     '''
     DESCRIPTION:
     Constructs list of neuron layers. Displays layout of network.
@@ -496,11 +508,10 @@ def costLogistic(H, Y):
     # Efficient calculation for binary classification.
     if k == 1:
         J = -1 / m * (Y @ np.log(H.T) + (1 - Y) @ np.log(1 - H.T))
-        grad = np.divide((H - Y), H * (1 - H))
     # Calculation for multi-class classification
     else:
         J = -1 / m * np.sum(Y * np.log(H) + (1 - Y) * np.log(1 - H))
-        grad = np.divide((H - Y), H * (1 - H))
+    grad = np.divide((H - Y), H * (1 - H))
     return J, grad
 
 def costMSE(H, Y):
